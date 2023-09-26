@@ -59,8 +59,10 @@ void delNode(size_t num)
 std::ostream& operator<<(std::ostream &strm, const ClusterStatus &status)
 {
 	strm << "{max_hops = " << status.max_hops
+	     << ", avg_hops = " << status.avg_hops
 	     << ", max_conns = " << status.max_conns
 	     << ", max_latency = " << status.max_latency
+	     << ", far_node_count = " << status.far_node_count
 	     << ", unknown_node_count = " << status.inaccessible_node_count
 	     << "}";
 	return strm;
@@ -92,9 +94,16 @@ int main()
 			}
 			std::cout << "waiting " << num << " microseconds\n";
 			size_t t = Scheduler::now();
-			while (Scheduler::more() && Scheduler::now() < t + num)
+			size_t last_report = t;
+			while (Scheduler::more() && Scheduler::now() < t + num) {
 				Scheduler::next();
+				if (Scheduler::now() > last_report + 10000) {
+					std::cout << getClusterStatus() << std::endl;
+					last_report = Scheduler::now();
+				}
+			}
 			std::cout << getClusterStatus() << std::endl;
+			std::cout << "finished waiting\n";
 
 //			for (const Node& node : Cluster::getNodes()) {
 //				std::cout << node.getId().rawID();

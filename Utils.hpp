@@ -112,7 +112,10 @@ void updMax(T& t, const U& u)
 template <class NODE_ID>
 struct GraphScanResult {
 	size_t max_hops = 0;
+	double avg_hops = 0;
 	double max_latency = 0;
+	double avg_latency = 0;
+	size_t far_node_count = 0;
 	std::vector<NODE_ID> inaccessible_nodes;
 };
 
@@ -125,6 +128,7 @@ GraphScanResult<NODE_ID> scanGraph(NODE_ID origin, const ALL_NODES_MAP& all,
 	visited.insert(origin);
 	wave1.emplace(origin, 0);
 	GraphScanResult<NODE_ID> res;
+	size_t avg_count = 1;
 	while (true) {
 		for (auto [node_id, cur_lat] : wave1) {
 			const auto& edges = jump(node_id);
@@ -141,6 +145,11 @@ GraphScanResult<NODE_ID> scanGraph(NODE_ID origin, const ALL_NODES_MAP& all,
 			break;
 		res.max_hops++;
 		for (auto [node_id, lat] : wave2) {
+			res.avg_hops += res.max_hops;
+			res.avg_latency += lat;
+			avg_count++;
+			if (res.max_hops > 2)
+				res.far_node_count++;
 			if (res.max_latency < lat)
 				res.max_latency = lat;
 			visited.insert(node_id);
@@ -152,5 +161,7 @@ GraphScanResult<NODE_ID> scanGraph(NODE_ID origin, const ALL_NODES_MAP& all,
 		if (visited.count(node_id) == 0)
 			res.inaccessible_nodes.push_back(node_id);
 	}
+	res.avg_hops /= avg_count;
+	res.avg_latency /= avg_count;
 	return res;
 }

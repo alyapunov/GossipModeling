@@ -77,8 +77,10 @@ void Node::applyKnowledge(const std::unordered_map<NodeId, KnownInfoNode>& more)
 
 struct ClusterStatus {
 	size_t max_hops;
+	double avg_hops;
 	size_t max_conns;
 	double max_latency;
+	size_t far_node_count;
 	size_t inaccessible_node_count;
 };
 
@@ -110,8 +112,11 @@ getClusterStatus()
 		auto scan = scanGraph(node.getId(), node_map, jump);
 		updMax(res.max_hops, scan.max_hops);
 		updMax(res.max_latency, scan.max_latency);
+		res.avg_hops += scan.avg_hops;
+		res.far_node_count += scan.far_node_count;
 		res.inaccessible_node_count += scan.inaccessible_nodes.size();
 	}
+	res.avg_hops /= nodes.size();
 	return res;
 }
 

@@ -15,7 +15,9 @@ struct Topology {
 	size_t known_count;
 	size_t conn_count;
 	size_t max_hops;
+	double avg_hops;
 	size_t max_latency;
+	size_t avg_latency;
 	size_t inaccessible_count;
 
 	NodeId extra_jump;
@@ -32,14 +34,14 @@ struct Topology {
 		calcHopsAndLatency();
 	}
 
-	static size_t getOptimalConnCount(size_t cluster_size)
+	size_t getOptimalConnCount() const
 	{
-		double base = cluster_size + INITIAL_CONNECT_COUNT;
+		double base = known_count + INITIAL_CONNECT_COUNT;
 		size_t count = size_t(CONN_COEF * std::pow(base, .5) + .5);
 		if (count < INITIAL_CONNECT_COUNT)
 			count = INITIAL_CONNECT_COUNT;
-		if (count > cluster_size - 1)
-			count = cluster_size - 1;
+		if (count > known_count - 1)
+			count = known_count - 1;
 		return count;
 	}
 
@@ -71,25 +73,39 @@ struct Topology {
 	{
 		auto scan = scanGraph(node.getId(), known_nodes, *this);
 		max_hops = scan.max_hops;
+		avg_hops = scan.avg_hops;
 		max_latency = scan.max_latency;
+		avg_latency = scan.avg_latency;
 		inaccessible_count = scan.inaccessible_nodes.size();
 	}
 
 	double prosperity() const {
-		double k1 = 1.;
-		double k2 = 1.;
-		double k3 = 1.;
-		double res = k1 * (CROSS_DC_LATENCY + CROSS_RACK_LATENCY +
-			      MINIMAL_LATENCY) / max_latency;
+		double k_max_lat = 1;
+		double k_avg_lat = 1;
+		double k_max_hops = 1;
+		double k_avg_hops = 1;
+		double k_conn_count = 1;
+		double expected_latency = (CROSS_DC_LATENCY +
+					   CROSS_RACK_LATENCY +
+					   MINIMAL_LATENCY) * 2;
+
+		k_max_lat *= expected_latency / max_latency;
+		k_avg_lat *= expected_latency / avg_latency;
+
 		if (max_hops > 2)
-			res += k2 / (max_hops - 1) * (max_hops - 1);
-		else
-			res += k2;
-		size_t opt_count = getOptimalConnCount(known_count);
+			k_max_hops *= 1. / ((max_hops - 1) * (max_hops - 1));
+		if (avg_hops > 2)
+			k_avg_hops *= 1. / ((avg_hops - 1) * (avg_hops - 1));
+
+		size_t opt_count = getOptimalConnCount();
 		if (conn_count > opt_count)
-			res += k3 * double(opt_count) / double(conn_count);
-		else
-			res += k3;
+			k_conn_count *= double(opt_count) / double(conn_count);
+		double res = .2 * k_max_lat +
+			     .3 * k_avg_lat +
+			     1. * k_max_hops +
+			     1. * k_avg_hops +
+			     1. * k_conn_count;
+		res /=  (inaccessible_count + 1);
 		return res;
 	}
 
@@ -128,25 +144,29 @@ struct JobTopology {
 		const KnownInfoNode &this_info = t.known_nodes.at(node_id);
 		NodeId best;
 
-		t.conn_count++;
-		for (const auto& [anode_id, info] : t.known_nodes) {
-			if (this_info.conns.count(anode_id) != 0)
-				continue;
-			if (anode_id == node_id)
-				continue;
-			t.extra_jump = anode_id;
-			t.calcHopsAndLatency();
-			double prosp = t.prosperity();
+		if (t.conn_count < 2 * t.getOptimalConnCount()) {
+			t.conn_count++;
+			for (const auto& [anode_id, info] : t.known_nodes) {
+				if (this_info.conns.count(anode_id) != 0)
+					continue;
+				if (anode_id == node_id)
+					continue;
+				if (info.conns.size() > t.getOptimalConnCount())
+					continue;
+				t.extra_jump = anode_id;
+				t.calcHopsAndLatency();
+				double prosp = t.prosperity();
 
-			if (prosp > cur_prosp) {
-				best = anode_id;
-				cur_prosp = prosp;
+				if (prosp > cur_prosp) {
+					best = anode_id;
+					cur_prosp = prosp;
+				}
 			}
+			t.extra_jump.reset();
+			t.conn_count--;
 		}
-		t.extra_jump.reset();
-		t.conn_count--;
 
-		if (t.conn_count >= t.getOptimalConnCount(t.known_count)) {
+		if (t.conn_count >= t.getOptimalConnCount()) {
 			t.conn_count--;
 			for (const auto& [anode_id, info] : t.known_nodes) {
 				if (this_info.conns.count(anode_id) == 0)

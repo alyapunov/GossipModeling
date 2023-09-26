@@ -25,7 +25,7 @@ constexpr size_t NUM_RACKS = 100;
 constexpr size_t BAD_PEER_LATENCY = 10000;
 constexpr size_t CROSS_DC_LATENCY = 4000;
 constexpr size_t CROSS_RACK_LATENCY = 2000;
-constexpr size_t MINIMAL_LATENCY = 1000;
+constexpr size_t MINIMAL_LATENCY = 500;
 
 // Coefficient of lognormal distribution of ping time.
 // Must be >= 1.
