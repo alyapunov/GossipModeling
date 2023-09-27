@@ -123,6 +123,37 @@ int main()
 //				}
 //				std::cout << std::endl;
 //			}
+		} else if (str == "print") {
+			std::cout << "graph G {\n";
+			const char *colors[3] = {"red", "green", "blue"};
+			auto& nodes = Cluster::getNodes();
+			for (size_t i = 0; i < 3; i++) {
+				std::cout << "  subgraph cluster" << i << " {\n";
+				std::cout << "    label=DC" << i << "\n";
+				std::cout << "    color=" << colors[i] << ";\n";
+				std::cout << "    node [style=filled];\n";
+				for (auto &node : nodes) {
+					if (node.dc != i)
+						continue;
+					std::cout << "    n" << node.getId().rawID() << ";\n";
+				}
+				std::cout << "  }\n";
+			}
+			for (auto &node : nodes) {
+				for (const auto& [conn_id, conn] : node.getConns()) {
+					if (!conn.isEstablished())
+						continue;
+					if (node.getId().rawID() <
+					    conn.getPeerId().rawID())
+						continue;
+					std::cout << "  n"
+						  << node.getId().rawID()
+						  << " -- n"
+						  << conn.getPeerId().rawID()
+						  << ";\n";
+				}
+			}
+			std::cout << "}\n";
 		} else {
 			std::cout << "unknown command " << str << std::endl;
 		}
